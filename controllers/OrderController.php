@@ -205,4 +205,77 @@ class OrderController extends Controller
             'productCount' => $productsCount
         ]);
     }
+
+    public function actionUpdateOrder($id, $productCount = null) {
+        $order = Order::find()->where(['id' => $id])->one();
+
+        $orderProducts = OrderProduct::find()->where(['order_id' => $id])->all();
+
+        if ($this->request->isPost) {
+            if ($order->load($this->request->post())) {
+                if ($order->validate()) {
+                    if ($productCount > 1) {
+
+                        $ordersValid = true;
+                        $ordersProducts = array();
+
+                        for ($i=1; $i < $productCount; $i++) { 
+                            $productOrder = new OrderProduct();
+                            $productOrder->attributes = $_POST['OrderProduct'][$i];
+
+                            if (!$productOrder->validate()) {
+                                $ordersValid = false;
+                                break;
+                            }
+                            array_push($ordersProducts, $productOrder);
+                        }
+
+                        if ($ordersValid) {
+                            $order->save();
+                            foreach ($orderProducts as $value) {
+                                $value->delete();
+                            }
+                            foreach ($ordersProducts as $orderProduct) {
+                                $orderProduct->order_id = $order->id;
+                                $orderProduct->save();
+                            }
+                            $ordersProducts = array_map(function ($e) {
+                                return "Product $e->name_product with price $e->price";
+                            }, $ordersProducts);
+                            return $this->asJson("Order with name $order->name updated! " . join(',', $ordersProducts));
+                        }
+
+                        throw new BadRequestHttpException("Products must be valid");
+                    }
+                    throw new BadRequestHttpException("You must select at least one product");
+                }  
+
+                throw new BadRequestHttpException('Must select name');
+            }
+            
+        }
+
+        return $this->render('order-update', [
+            'order' => $order,
+            'productCount' => count($orderProducts) + 1,
+            'orderProducts' => $orderProducts
+        ]);
+    }
+
+    public function actionViewOrder($id) {
+        $model = Order::find()->where(['id' => $id])->one();
+
+        return $this->render('order-view', [
+            'model' => $model
+        ]);
+    }
+
+    public function actionDeleteOrder($id) {
+        $order = Order::find()->where(['id' => $id])->one();
+        $orderProducts = OrderProduct::find()->where(['order_id' => $id])->all();
+        foreach ($orderProducts as $value) {
+            $value->delete();
+        }
+        $order->delete();
+    }
 }
